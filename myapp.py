@@ -66,6 +66,57 @@ window = tk.Tk()
 window.title("Skolas datubāze")
 window.geometry("800x950")
 
+main_frame = tk.Frame(window)
+main_frame.pack(fill=tk.BOTH, expand=True)
+
+canvas = tk.Canvas(main_frame, highlightthickness=0)
+canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+scrollbar = tk.Scrollbar(main_frame, orient=tk.VERTICAL, command=canvas.yview)
+scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+canvas.configure(yscrollcommand=scrollbar.set)
+
+window = tk.Frame(canvas)
+
+canvas_window = canvas.create_window((0, 0), window=window, anchor="nw")
+
+
+def on_frame_configure(event):
+    canvas.configure(scrollregion=canvas.bbox("all"))
+
+
+window.bind("<Configure>", on_frame_configure)
+
+
+def on_canvas_configure(event):
+    canvas.itemconfig(canvas_window, width=event.width)
+
+
+canvas.bind("<Configure>", on_canvas_configure)
+
+
+def on_mouse_wheel(event):
+    if event.delta:
+        canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+    else:
+        if event.num == 4:
+            canvas.yview_scroll(-1, "units")
+        elif event.num == 5:
+            canvas.yview_scroll(1, "units")
+
+
+def bind_to_mouse(event):
+    canvas.bind_all("<MouseWheel>", on_mouse_wheel)
+
+
+def unbind_from_mouse(event):
+    canvas.unbind_all("<MouseWheel>")
+
+
+canvas.bind('<Enter>', bind_to_mouse)
+canvas.bind('<Leave>', unbind_from_mouse)
+
 header = tk.Label(
     window,
     text="Skolas datubāze",
