@@ -104,7 +104,7 @@ SELECT
 FROM homework
 JOIN subjects
     ON homework.subject_id = subjects.subject_id
-WHERE subjects.subject_id = 2
+WHERE subjects.subject_id = 4
 """)
 homework = cursor.fetchall()
 

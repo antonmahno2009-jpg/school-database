@@ -1,4 +1,5 @@
 import tkinter as tk
+import customtkinter as ctk
 
 from funkcijas import (
     add_subject,
@@ -7,6 +8,8 @@ from funkcijas import (
     add_pd
 )
 
+ctk.set_appearance_mode("System")  # "System", "Dark", "Light"
+ctk.set_default_color_theme("blue")  # "blue", "green", "dark-blue"
 
 def addSubjectFromWindow():
     name = name_input.get()
@@ -145,7 +148,9 @@ teacher_input.pack(pady=5)
 tk.Button(
     subject_block,
     text="Pievienot priekšmetu",
-    command=addSubjectFromWindow
+    command=addSubjectFromWindow,
+    bg="green",
+    fg="white",
 ).pack(pady=5)
 
 result = tk.Label(subject_block, text="", fg="green")
@@ -183,7 +188,9 @@ completed_input.pack(pady=5)
 tk.Button(
     homework_block,
     text="Pievienot mājasdarbu",
-    command=addHomeworkFromWindow
+    command=addHomeworkFromWindow,
+    bg="green",
+    fg="white",
 ).pack(pady=5)
 
 result2 = tk.Label(homework_block, text="", fg="green")
@@ -214,7 +221,9 @@ grade_date_input.pack(pady=5)
 tk.Button(
     grade_block,
     text="Pievienot atzīmi",
-    command=addGradeFromWindow
+    command=addGradeFromWindow,
+    bg="green",
+    fg="white",
 ).pack(pady=5)
 
 result3 = tk.Label(grade_block, text="", fg="green")
@@ -241,7 +250,9 @@ pd_date_input.pack(pady=5)
 tk.Button(
     pd_block,
     text="Pievienot PD",
-    command=addPDFromWindow
+    command=addPDFromWindow,
+    bg="green",
+    fg="white",
 ).pack(pady=5)
 
 result4 = tk.Label(pd_block, text="", fg="green")
