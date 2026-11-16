@@ -1,18 +1,15 @@
 import sqlite3
 
-# Tabula -> primārās atslēgas kolonna
 KEYS = {"subjects": "subject_id", "homework": "homework_id",
         "grades": "grade_id", "pd": "pd_id"}
 
 
-# Pieslēgšanās skolas datubāzei
 def connect():
     database = sqlite3.connect("school.db")
     database.execute("PRAGMA foreign_keys = ON")
     return database
 
 
-# Izpilda jebkuru SQL vaicājumu un atgriež rezultātu
 def run(sql, params=()):
     database = connect()
     rows = database.execute(sql, params).fetchall()
@@ -21,7 +18,6 @@ def run(sql, params=()):
     return rows
 
 
-# Izveido tabulas (tādas pašas kā main.py), ja tās vēl nepastāv
 def init_db():
     run("""CREATE TABLE IF NOT EXISTS subjects(
         subject_id INTEGER PRIMARY KEY,
@@ -93,9 +89,9 @@ def get_pd():
         ORDER BY p.pd_date""")
 
 
-# Dzēst / mainīt
+# Dzēst
 def delete_record(table, record_id):
-    if table == "subjects":  # vispirms izdzēš priekšmetam piesaistītos ierakstus
+    if table == "subjects":
         for child in ("homework", "grades", "pd"):
             run(f"DELETE FROM {child} WHERE subject_id = ?", (record_id,))
     if table in KEYS:
