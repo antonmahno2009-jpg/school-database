@@ -1,5 +1,9 @@
 import sqlite3
 
+# Tabula -> primārās atslēgas kolonna
+KEYS = {"subjects": "subject_id", "homework": "homework_id",
+        "grades": "grade_id", "pd": "pd_id"}
+
 
 # Pieslēgšanās skolas datubāzei
 def connect():
@@ -8,174 +12,95 @@ def connect():
     return database
 
 
-# Pievienot priekšmetu
+# Izpilda jebkuru SQL vaicājumu un atgriež rezultātu
+def run(sql, params=()):
+    database = connect()
+    rows = database.execute(sql, params).fetchall()
+    database.commit()
+    database.close()
+    return rows
+
+
+# Izveido tabulas (tādas pašas kā main.py), ja tās vēl nepastāv
+def init_db():
+    run("""CREATE TABLE IF NOT EXISTS subjects(
+        subject_id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        teacher_name TEXT NOT NULL)""")
+    run("""CREATE TABLE IF NOT EXISTS homework(
+        homework_id INTEGER PRIMARY KEY,
+        subject_id INTEGER NOT NULL,
+        description TEXT,
+        deadline DATETIME NOT NULL,
+        completed BOOLEAN NOT NULL DEFAULT 0,
+        FOREIGN KEY (subject_id) REFERENCES subjects (subject_id))""")
+    run("""CREATE TABLE IF NOT EXISTS grades(
+        grade_id INTEGER PRIMARY KEY,
+        subject_id INTEGER NOT NULL,
+        grade_value INTEGER NOT NULL,
+        grade_date DATE NOT NULL,
+        FOREIGN KEY (subject_id) REFERENCES subjects (subject_id))""")
+    run("""CREATE TABLE IF NOT EXISTS pd(
+        pd_id INTEGER PRIMARY KEY,
+        subject_id INTEGER NOT NULL,
+        pd_date DATE NOT NULL,
+        FOREIGN KEY (subject_id) REFERENCES subjects (subject_id))""")
+
+
+# Pievienot
 def add_subject(name, teacher):
-    database = connect()
-    cursor = database.cursor()
-
-    cursor.execute(
-        """
-        INSERT INTO subjects(name, teacher_name)
-        VALUES (?, ?)
-        """,
-        (name, teacher)
-    )
-
-    database.commit()
-    subject_id = cursor.lastrowid
-    database.close()
-
-    return subject_id
+    run("INSERT INTO subjects(name, teacher_name) VALUES (?, ?)", (name, teacher))
 
 
-# Pievienot mājasdarbu
 def add_homework(subject_id, description, deadline, completed):
-    database = connect()
-    cursor = database.cursor()
-
-    cursor.execute(
-        """
-        INSERT INTO homework(subject_id, description, deadline, completed)
-        VALUES (?, ?, ?, ?)
-        """,
-        (subject_id, description, deadline, completed)
-    )
-
-    database.commit()
-    homework_id = cursor.lastrowid
-    database.close()
-
-    return homework_id
+    run("INSERT INTO homework(subject_id, description, deadline, completed) VALUES (?, ?, ?, ?)",
+        (subject_id, description, deadline, completed))
 
 
-# Pievienot atzīmi
 def add_grade(subject_id, grade_value, grade_date):
-    database = connect()
-    cursor = database.cursor()
-
-    cursor.execute(
-        """
-        INSERT INTO grades(subject_id, grade_value, grade_date)
-        VALUES (?, ?, ?)
-        """,
-        (subject_id, grade_value, grade_date)
-    )
-
-    database.commit()
-    grade_id = cursor.lastrowid
-    database.close()
-
-    return grade_id
+    run("INSERT INTO grades(subject_id, grade_value, grade_date) VALUES (?, ?, ?)",
+        (subject_id, grade_value, grade_date))
 
 
-# Pievienot personīgo attīstību (PD)
 def add_pd(subject_id, pd_date):
-    database = connect()
-    cursor = database.cursor()
-
-    cursor.execute(
-        """
-        INSERT INTO pd(subject_id, pd_date)
-        VALUES (?, ?)
-        """,
-        (subject_id, pd_date)
-    )
-
-    database.commit()
-    pd_id = cursor.lastrowid
-    database.close()
-
-    return pd_id
+    run("INSERT INTO pd(subject_id, pd_date) VALUES (?, ?)", (subject_id, pd_date))
 
 
-# Iegūt visus priekšmetus
+# Iegūt
 def get_subjects():
-    database = connect()
-    cursor = database.cursor()
-
-    cursor.execute(
-        """
-        SELECT prieksmeti_id, nosaukums, skolotajs
-        FROM prieksmeti
-        ORDER BY prieksmeti_id
-        """
-    )
-
-    subjects = cursor.fetchall()
-    database.close()
-
-    return subjects
+    return run("SELECT subject_id, name, teacher_name FROM subjects ORDER BY subject_id")
 
 
-# Iegūt visus mājasdarbus
 def get_homework():
-    database = connect()
-    cursor = database.cursor()
-
-    cursor.execute(
-        """
-        SELECT
-            majasdarbi.majasdarbi_id,
-            prieksmeti.nosaukums,
-            majasdarbi.apraksts,
-            majasdarbi.termins
-        FROM majasdarbi
-        JOIN prieksmeti
-            ON majasdarbi.prieksmeti_id = prieksmeti.prieksmeti_id
-        ORDER BY majasdarbi.majasdarbi_id
-        """
-    )
-
-    homework = cursor.fetchall()
-    database.close()
-
-    return homework
+    return run("""
+        SELECT h.homework_id, s.name, h.description, h.deadline,
+               CASE h.completed WHEN 1 THEN 'Pabeigts' ELSE 'Jāizdara' END
+        FROM homework h JOIN subjects s ON h.subject_id = s.subject_id
+        ORDER BY h.completed, h.deadline""")
 
 
-# Iegūt visas atzīmes
 def get_grades():
-    database = connect()
-    cursor = database.cursor()
-
-    cursor.execute(
-        """
-        SELECT
-            atzimes.atzimes_id,
-            prieksmeti.nosaukums,
-            atzimes.atzime,
-            atzimes.datums
-        FROM atzimes
-        JOIN prieksmeti
-            ON atzimes.prieksmeti_id = prieksmeti.prieksmeti_id
-        ORDER BY atzimes.atzimes_id
-        """
-    )
-
-    grades = cursor.fetchall()
-    database.close()
-
-    return grades
+    return run("""
+        SELECT g.grade_id, s.name, g.grade_value, g.grade_date
+        FROM grades g JOIN subjects s ON g.subject_id = s.subject_id
+        ORDER BY g.grade_date DESC""")
 
 
-# Iegūt visus PD ierakstus
 def get_pd():
-    database = connect()
-    cursor = database.cursor()
+    return run("""
+        SELECT p.pd_id, s.name, p.pd_date
+        FROM pd p JOIN subjects s ON p.subject_id = s.subject_id
+        ORDER BY p.pd_date""")
 
-    cursor.execute(
-        """
-        SELECT
-            pd.pd_id,
-            prieksmeti.nosaukums,
-            pd.datums
-        FROM pd
-        JOIN prieksmeti
-            ON pd.prieksmeti_id = prieksmeti.prieksmeti_id
-        ORDER BY pd.pd_id
-        """
-    )
 
-    pd_records = cursor.fetchall()
-    database.close()
+# Dzēst / mainīt
+def delete_record(table, record_id):
+    if table == "subjects":  # vispirms izdzēš priekšmetam piesaistītos ierakstus
+        for child in ("homework", "grades", "pd"):
+            run(f"DELETE FROM {child} WHERE subject_id = ?", (record_id,))
+    if table in KEYS:
+        run(f"DELETE FROM {table} WHERE {KEYS[table]} = ?", (record_id,))
 
-    return pd_records
+
+def toggle_homework(homework_id):
+    run("UPDATE homework SET completed = 1 - completed WHERE homework_id = ?", (homework_id,))
