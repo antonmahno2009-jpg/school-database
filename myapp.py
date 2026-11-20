@@ -13,7 +13,16 @@ BG, CARD, BORDER = ("#F5F6F8", "#141517"), ("#FFFFFF", "#1E1F23"), ("#E4E6EA", "
 TEXT, MUTED = ("#1F2328", "#ECECEC"), ("#6B7280", "#8B909A")
 ACCENT, DANGER, HOVER = ("#2F6FDE", "#4C8DFF"), ("#C0392B", "#E5675A"), ("#F0F1F4", "#26282D")
 
-HINTS = {"date": "GGGG-MM-DD", "datetime": "GGGG-MM-DD HH:MM", "grade": "1–10"}
+HINTS = {"date": "GGGG-MM-DD", "datetime": "GGGG-MM-DD HH:MM", "grade": "1–10", "num": "1–8"}
+RANGES = {"grade": (1, 10), "num": (1, 8)}
+WEEKDAYS = ["Pirmdiena", "Otrdiena", "Trešdiena", "Ceturtdiena", "Piektdiena"]
+REF_KINDS = ("subject", "lesson", "pd")   # lauki, kas ir izvēlne no citas tabulas
+MISSING = {"subject": "Vispirms pievieno priekšmetu.",
+           "lesson": "Vispirms pievieno stundu stundu sarakstā.",
+           "pd": "Vispirms pievieno pārbaudes darbu."}
+TOGGLES = {"homework": "Pabeigts / nepabeigts",
+           "absences": "Attaisnots / neattaisnots",
+           "pd_topics": "Sagatavots / nesagatavots"}
 FORMATS = {"date": "%Y-%m-%d", "datetime": "%Y-%m-%d %H:%M"}
 
 # Sadaļa: (tabula, get, add, kolonnas, lauki)
@@ -31,6 +40,22 @@ PAGES = {
     "Pārbaudes darbi": ("pd", db.get_pd, db.add_pd,
                         ["ID", "Priekšmets", "Datums"],
                         [("Priekšmets", "subject"), ("Datums", "date")]),
+    "Stundu saraksts": ("lessons", db.get_lessons, db.add_lesson,
+                        ["ID", "Priekšmets", "Diena", "Stunda", "Kabinets"],
+                        [("Priekšmets", "subject"), ("Diena", "weekday"),
+                         ("Stunda", "num"), ("Kabinets", "text")]),
+    "Piezīmes": ("notes", db.get_notes, db.add_note,
+                 ["ID", "Priekšmets", "Virsraksts", "Saturs", "Datums"],
+                 [("Priekšmets", "subject"), ("Virsraksts", "text"),
+                  ("Saturs", "text"), ("Datums", "date")]),
+    "Kavējumi": ("absences", db.get_absences, db.add_absence,
+                 ["ID", "Priekšmets", "Datums", "Iemesls", "Statuss"],
+                 [("Stunda", "lesson"), ("Datums", "date"),
+                  ("Iemesls", "text"), ("Attaisnots", "done")]),
+    "Pārbaužu tēmas": ("pd_topics", db.get_topics, db.add_topic,
+                       ["ID", "Priekšmets", "Datums", "Tēma", "Statuss"],
+                       [("Pārbaudes darbs", "pd"), ("Tēma", "text"),
+                        ("Sagatavots", "done")]),
 }
 
 
@@ -63,21 +88,23 @@ def style_tree():
     s.map("Treeview.Heading", background=[("active", head)])
 
 
-def read(kind, widget, subjects):
+def read(kind, widget, refs):
     """Nolasa un pārbauda lauka vērtību; kļūdas gadījumā met ValueError."""
     value = widget.get() if kind == "done" else widget.get().strip()
     if kind == "done":
         return value
-    if kind == "subject":
-        if value not in subjects:
-            raise ValueError("Vispirms pievieno priekšmetu.")
-        return subjects[value]
+    if kind == "weekday":
+        return WEEKDAYS.index(value) + 1
+    if kind in REF_KINDS:
+        if value not in refs[kind]:
+            raise ValueError(MISSING[kind])
+        return refs[kind][value]
     if not value:
         raise ValueError("Aizpildi visus laukus.")
     try:
-        if kind == "grade":
+        if kind in RANGES:
             value = int(value)
-            if not 1 <= value <= 10:
+            if not RANGES[kind][0] <= value <= RANGES[kind][1]:
                 raise ValueError
         elif kind in FORMATS:
             datetime.strptime(value, FORMATS[kind])
@@ -90,7 +117,7 @@ class Page(ctk.CTkFrame):
     def __init__(self, master, title, table, get, add, columns, fields):
         super().__init__(master, fg_color="transparent")
         self.table, self.get, self.add, self.fields = table, get, add, fields
-        self.subjects = {}
+        self.refs = {}
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(3, weight=1)
 
@@ -105,9 +132,9 @@ class Page(ctk.CTkFrame):
             form.grid_columnconfigure(i, weight=0 if kind == "done" else 1)
             ctk.CTkLabel(form, text=label, text_color=MUTED
                          ).grid(row=0, column=i, sticky="w", padx=(16, 0), pady=(14, 0))
-            if kind == "subject":
-                w = ctk.CTkOptionMenu(form, values=["—"], height=36, anchor="w",
-                                      dynamic_resizing=False)
+            if kind in REF_KINDS or kind == "weekday":
+                w = ctk.CTkOptionMenu(form, values=WEEKDAYS if kind == "weekday" else ["—"],
+                                      height=36, anchor="w", dynamic_resizing=False)
             elif kind == "done":
                 w = ctk.CTkSwitch(form, text="")
             else:
@@ -142,18 +169,22 @@ class Page(ctk.CTkFrame):
         self.count = ctk.CTkLabel(tools, text="", text_color=MUTED)
         self.count.pack(side="left")
         ghost(tools, "Dzēst atlasīto", self.delete, DANGER).pack(side="right")
-        if table == "homework":
-            ghost(tools, "Pabeigts / nepabeigts", self.toggle, ACCENT).pack(side="right", padx=8)
+        if table in TOGGLES:
+            ghost(tools, TOGGLES[table], self.toggle, ACCENT).pack(side="right", padx=8)
 
     def say(self, text, error=False):
         self.status.configure(text=text, text_color=DANGER if error else ACCENT)
         self.after(3000, lambda: self.status.configure(text=""))
 
     def refresh(self):
-        self.subjects = {f"{name} (ID {i})": i for i, name, _ in db.get_subjects()}
+        self.refs = {
+            "subject": {f"{name} (ID {i})": i for i, name, _ in db.get_subjects()},
+            "lesson": {f"{r[1]} · {r[2]} {r[3]}. st. (ID {r[0]})": r[0] for r in db.get_lessons()},
+            "pd": {f"{r[1]} · {r[2]} (ID {r[0]})": r[0] for r in db.get_pd()},
+        }
         for w, (_, kind) in zip(self.widgets, self.fields):
-            if kind == "subject":
-                values = list(self.subjects) or ["—"]
+            if kind in REF_KINDS:
+                values = list(self.refs[kind]) or ["—"]
                 w.configure(values=values)
                 if w.get() not in values:
                     w.set(values[0])
@@ -165,13 +196,13 @@ class Page(ctk.CTkFrame):
 
     def submit(self):
         try:
-            args = [read(k, w, self.subjects)
+            args = [read(k, w, self.refs)
                     for w, (_, k) in zip(self.widgets, self.fields)]
         except ValueError as error:
             return self.say(str(error), error=True)
         self.add(*args)
         for w, (_, k) in zip(self.widgets, self.fields):
-            if k in ("text", "datetime", "grade"):
+            if k in ("text", "datetime", "grade", "num"):
                 w.delete(0, "end")
         self.refresh()
         self.say("Pievienots.")
@@ -191,7 +222,7 @@ class Page(ctk.CTkFrame):
     def toggle(self):
         record_id = self.selected()
         if record_id:
-            db.toggle_homework(record_id)
+            db.toggle_flag(self.table, record_id)
             self.refresh()
 
 
